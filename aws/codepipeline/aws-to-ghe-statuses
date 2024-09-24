@@ -1,0 +1,50 @@
+# Export Build statuses from AWS codepipeline to Github Enterprise (GHE) Server
+# Using curl API calls from CodePilene to GHE
+version: 0.2
+env:
+  git-credential-helper: yes
+  secrets-manager:
+    TK: arn:aws:secretsmanager:eu-central-1:555555555:secret:secret-manager/ghe/token
+phases:
+  install:
+    commands:
+      - echo "token: ..."
+      - echo $TK | cut -c 1-5
+      - COMMIT=$(git rev-parse HEAD)
+      - echo "PR commit"
+      - echo $COMMIT
+      # repository
+      - REPO=$(git remote get-url origin | sed 's/.*\/\([^ ]*\/[^.]*\).*/\1/')
+      # Codebuild Log URL
+      - URL="https://eu-central-1.console.aws.amazon.com/codesuite/codebuild/555555555/projects/cb-project/build/branch-test%3A$COMMIT"
+      - |
+        curl -L -H "Accept:
+        application/vnd.github+json" -H "Authorization: Bearer $TK" \
+        -H "X-GitHub-Api-Version: 2022-11-28" "https://ghe.example.com/api/v3/repos/$REPO/statuses/$COMMIT" \
+        -d  '{"state":"failure","target_url":"'$URL'","description":"Pending","context":"CDBuild"}'
+      # Install any dependencies here, e.g., npm install, pip install, etc.
+      - echo Dependencies installed.
+  pre_build:
+    commands:
+      - echo Preparing build environment...
+      # Commands that prepare the environment can be placed here.
+      - echo Build environment prepared.
+      - |
+        curl -L -H "Accept:
+        application/vnd.github+json" -H "Authorization: Bearer $TK" \
+        -H "X-GitHub-Api-Version: 2022-11-28" "https://ghe.example.com.com/api/v3/repos/$REPO/statuses/$COMMIT" \
+        -d  '{"state":"pending","target_url":"'$URL'","description":"Compiling","context":"CDBuild"}'
+  build:
+    commands:
+      - echo Build completed.
+      - sleep 10
+      - |
+        curl -L -H "Accept:
+        application/vnd.github+json" -H "Authorization: Bearer $TK" \
+        -H "X-GitHub-Api-Version: 2022-11-28" "https://ghe.example.com.com/api/v3/repos/$REPO/statuses/$COMMIT" \
+        -d  '{"state":"success","target_url":"$URL","description":"Done","context":"CDBuild"}'
+  post_build:
+    commands:
+      - echo Post-build actions...
+      # Commands to execute after the build, e.g., tests, packaging, etc.
+      - echo Post-build actions completed.
